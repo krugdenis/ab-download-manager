@@ -44,6 +44,7 @@ data class MyColors(
     val info: Color,
     val onInfo: Color,
     val isLight: Boolean,
+    val queueColors: List<Color>,
 ) {
 
     val warningGradient: Brush by lazy {
@@ -160,6 +161,7 @@ private object AnimateMyColors {
             isLight = isLight,
             name = toBeAnimated.name,
             id = toBeAnimated.id,
+            queueColors = toBeAnimated.queueColors,
         )
     }
 
@@ -230,6 +232,7 @@ private object AnimateMyColorsWithSingleTransition {
             isLight = toBeAnimated.isLight,
             name = toBeAnimated.name,
             id = toBeAnimated.id,
+            queueColors = toBeAnimated.queueColors,
         )
     }
 }

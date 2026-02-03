@@ -139,6 +139,7 @@ class DesktopSettingsComponent(
                             CommonSettings.dynamicPartDownloadConfig(appRepository),
                         )
                     ),
+                    CommonSettings.speedScheduleConfig(appRepository),
                     ConfigurableGroup(
                         nestedConfigurable = listOf(
                             CommonSettings.perHostSettings(perHostSettingsPageManager),

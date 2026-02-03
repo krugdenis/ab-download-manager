@@ -53,6 +53,7 @@ fun IconActionButton(
     backgroundColor: Color = myColors.surface,
     contentColor: Color = LocalContentColor.current,
     borderColor: Color = myColors.onBackground / 10,
+    focusedBorderColor: Color = myColors.focusedBorderColor,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     automaticMirrorIcon: Boolean = true,
     iconSize: Dp = mySpacings.iconSize,
@@ -76,7 +77,7 @@ fun IconActionButton(
                     .ifThen(isActiveOrFocused || requiresAttention) {
                         border(
                             1.dp,
-                            myColors.focusedBorderColor / if (isActiveOrFocused) 1f else alphaFlicker(),
+                            focusedBorderColor / if (isActiveOrFocused) 1f else alphaFlicker(),
                             shape
                         )
                     }

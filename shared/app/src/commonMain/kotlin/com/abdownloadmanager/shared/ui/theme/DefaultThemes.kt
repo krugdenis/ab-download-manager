@@ -25,7 +25,17 @@ object DefaultThemes {
         onWarning = Color(0xFF1E1E1E),
         info = Color(0xFF40A9F3),
         onInfo = Color(0xFF1E1E1E),
-        isLight = false
+        isLight = false,
+        queueColors = listOf(
+            Color(0xFF4CAF50),  // Green
+            Color(0xFF2196F3),  // Blue
+            Color(0xFFFF9800),  // Orange
+            Color(0xFF9C27B0),  // Purple
+            Color(0xFFF44336),  // Red
+            Color(0xFF00BCD4),  // Cyan
+            Color(0xFFFFEB3B),  // Yellow
+            Color(0xFF8BC34A),  // Light Green
+        ),
     )
 
     val light = MyColors(
@@ -49,7 +59,17 @@ object DefaultThemes {
         onWarning = Color(0xFF232323),
         info = Color(0xFF40A9F3),
         onInfo = Color(0xFF232323),
-        isLight = true
+        isLight = true,
+        queueColors = listOf(
+            Color(0xFF2E7D32),  // Darker Green
+            Color(0xFF1976D2),  // Darker Blue
+            Color(0xFFE65100),  // Darker Orange
+            Color(0xFF7B1FA2),  // Darker Purple
+            Color(0xFFC62828),  // Darker Red
+            Color(0xFF00838F),  // Darker Cyan
+            Color(0xFFF9A825),  // Darker Yellow
+            Color(0xFF558B2F),  // Darker Light Green
+        ),
     )
 
     val obsidian = MyColors(
@@ -72,6 +92,16 @@ object DefaultThemes {
         info = Color(0xFF2f77d4),
         onInfo = Color.White,
         isLight = false,
+        queueColors = listOf(
+            Color(0xFF4CAF50),  // Green
+            Color(0xFF2196F3),  // Blue
+            Color(0xFFFF9800),  // Orange
+            Color(0xFF9C27B0),  // Purple
+            Color(0xFFF44336),  // Red
+            Color(0xFF00BCD4),  // Cyan
+            Color(0xFFFFEB3B),  // Yellow
+            Color(0xFF8BC34A),  // Light Green
+        ),
     )
 
     val deepOcean = MyColors(
@@ -95,7 +125,17 @@ object DefaultThemes {
         onWarning = Color(0xFF232323),
         info = Color(0xFF40A9F3),
         onInfo = Color(0xFF232323),
-        isLight = false
+        isLight = false,
+        queueColors = listOf(
+            Color(0xFF4CAF50),  // Green
+            Color(0xFF2196F3),  // Blue
+            Color(0xFFFF9800),  // Orange
+            Color(0xFF9C27B0),  // Purple
+            Color(0xFFF44336),  // Red
+            Color(0xFF00BCD4),  // Cyan
+            Color(0xFFFFEB3B),  // Yellow
+            Color(0xFF8BC34A),  // Light Green
+        ),
     )
 
     val black = MyColors(
@@ -119,7 +159,17 @@ object DefaultThemes {
         onWarning = Color(0xFF000000),
         info = Color(0xFF40A9F3),
         onInfo = Color(0xFF000000),
-        isLight = false
+        isLight = false,
+        queueColors = listOf(
+            Color(0xFF4CAF50),  // Green
+            Color(0xFF2196F3),  // Blue
+            Color(0xFFFF9800),  // Orange
+            Color(0xFF9C27B0),  // Purple
+            Color(0xFFF44336),  // Red
+            Color(0xFF00BCD4),  // Cyan
+            Color(0xFFFFEB3B),  // Yellow
+            Color(0xFF8BC34A),  // Light Green
+        ),
     )
 
     val lightGray = MyColors(
@@ -143,7 +193,17 @@ object DefaultThemes {
         onWarning = Color(0xFF232323),
         info = Color(0xFF40A9F3),
         onInfo = Color(0xFF232323),
-        isLight = true
+        isLight = true,
+        queueColors = listOf(
+            Color(0xFF2E7D32),  // Darker Green
+            Color(0xFF1976D2),  // Darker Blue
+            Color(0xFFE65100),  // Darker Orange
+            Color(0xFF7B1FA2),  // Darker Purple
+            Color(0xFFC62828),  // Darker Red
+            Color(0xFF00838F),  // Darker Cyan
+            Color(0xFFF9A825),  // Darker Yellow
+            Color(0xFF558B2F),  // Darker Light Green
+        ),
     )
 
 
