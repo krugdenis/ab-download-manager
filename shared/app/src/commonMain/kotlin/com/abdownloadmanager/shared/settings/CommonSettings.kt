@@ -4,7 +4,9 @@ import com.abdownloadmanager.resources.Res
 import com.abdownloadmanager.shared.pagemanager.PerHostSettingsPageManager
 import com.abdownloadmanager.shared.repository.BaseAppRepository
 import com.abdownloadmanager.shared.storage.BaseAppSettingsStorage
+import com.abdownloadmanager.shared.ui.configurable.ConfigurableGroup
 import com.abdownloadmanager.shared.ui.configurable.item.BooleanConfigurable
+import com.abdownloadmanager.shared.ui.configurable.item.DayOfWeekConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.EnumConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.FolderConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.IntConfigurable
@@ -13,8 +15,10 @@ import com.abdownloadmanager.shared.ui.configurable.item.ProxyConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.SpeedLimitConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.StringConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.ThemeConfigurable
+import com.abdownloadmanager.shared.ui.configurable.item.TimeConfigurable
 import com.abdownloadmanager.shared.ui.theme.ThemeManager
 import com.abdownloadmanager.shared.util.MaximumDownloadRetriesLimitation
+import com.abdownloadmanager.shared.util.SpeedLimitDefaults
 import com.abdownloadmanager.shared.util.ThreadCountLimitation
 import com.abdownloadmanager.shared.util.convertPositiveSpeedToHumanReadable
 import com.abdownloadmanager.shared.util.proxy.ProxyManager
@@ -32,8 +36,10 @@ import ir.amirab.util.datasize.SizeFactors
 import ir.amirab.util.datasize.SizeUnit
 import ir.amirab.util.flow.createMutableStateFlowFromStateFlow
 import ir.amirab.util.flow.mapStateFlow
+import ir.amirab.util.flow.mapTwoWayStateFlow
 import ir.amirab.util.osfileutil.FileUtils
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.roundToInt
 
 object CommonSettings {
@@ -316,6 +322,7 @@ object CommonSettings {
             title = Res.string.settings_global_speed_limiter.asStringSource(),
             description = Res.string.settings_global_speed_limiter_description.asStringSource(),
             backedBy = appRepository.speedLimiter,
+            lastCustomLimit = appRepository.lastCustomSpeedLimit,
             describe = {
                 if (it == 0L) {
                     Res.string.unlimited.asStringSource()
@@ -326,6 +333,75 @@ object CommonSettings {
                     ).asStringSource()
                 }
             }
+        )
+    }
+
+    fun speedScheduleConfig(appRepository: BaseAppRepository): ConfigurableGroup {
+        val schedule = appRepository.speedSchedule
+
+        return ConfigurableGroup(
+            groupTitle = MutableStateFlow(Res.string.settings_speed_schedule.asStringSource()),
+            mainConfigurable = BooleanConfigurable(
+                title = Res.string.settings_speed_schedule_enable.asStringSource(),
+                description = Res.string.settings_speed_schedule_description.asStringSource(),
+                backedBy = schedule.mapTwoWayStateFlow(
+                    map = { it.enabled },
+                    unMap = { copy(enabled = it) }
+                ),
+                describe = {
+                    if (it) Res.string.enabled.asStringSource()
+                    else Res.string.disabled.asStringSource()
+                }
+            ),
+            nestedVisible = schedule.mapStateFlow { it.enabled },
+            nestedConfigurable = listOf(
+                SpeedLimitConfigurable(
+                    title = Res.string.settings_alternative_speed_limit.asStringSource(),
+                    description = Res.string.settings_alternative_speed_limit_description.asStringSource(),
+                    backedBy = schedule.mapTwoWayStateFlow(
+                        map = { it.alternativeSpeedLimit },
+                        unMap = { copy(alternativeSpeedLimit = it) }
+                    ),
+                    lastCustomLimit = MutableStateFlow(SpeedLimitDefaults.MIN_LIMIT_BYTES),
+                    describe = {
+                        when {
+                            it == 0L -> Res.string.unlimited.asStringSource()
+                            else -> convertPositiveSpeedToHumanReadable(
+                                it,
+                                appRepository.speedUnit.value
+                            ).asStringSource()
+                        }
+                    }
+                ),
+                DayOfWeekConfigurable(
+                    title = Res.string.settings_speed_schedule_days.asStringSource(),
+                    description = Res.string.settings_speed_schedule_days_description.asStringSource(),
+                    backedBy = schedule.mapTwoWayStateFlow(
+                        map = { it.daysOfWeek },
+                        unMap = { copy(daysOfWeek = it) }
+                    ),
+                    validate = { it.isNotEmpty() },
+                    describe = { "".asStringSource() }
+                ),
+                TimeConfigurable(
+                    title = Res.string.settings_speed_schedule_start_time.asStringSource(),
+                    description = Res.string.settings_speed_schedule_start_time_description.asStringSource(),
+                    backedBy = schedule.mapTwoWayStateFlow(
+                        map = { it.startTime },
+                        unMap = { copy(startTime = it) }
+                    ),
+                    describe = { "".asStringSource() }
+                ),
+                TimeConfigurable(
+                    title = Res.string.settings_speed_schedule_end_time.asStringSource(),
+                    description = Res.string.settings_speed_schedule_end_time_description.asStringSource(),
+                    backedBy = schedule.mapTwoWayStateFlow(
+                        map = { it.endTime },
+                        unMap = { copy(endTime = it) }
+                    ),
+                    describe = { "".asStringSource() }
+                )
+            )
         )
     }
 

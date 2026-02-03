@@ -2,6 +2,7 @@ package com.abdownloadmanager.desktop.pages.home.sections
 
 import com.abdownloadmanager.shared.util.DOUBLE_CLICK_DELAY
 import com.abdownloadmanager.shared.util.ui.WithContentAlpha
+import com.abdownloadmanager.shared.util.ui.getQueueColor
 import com.abdownloadmanager.shared.util.ui.myColors
 import com.abdownloadmanager.shared.ui.widget.CheckBox
 import com.abdownloadmanager.shared.ui.widget.Text
@@ -39,7 +40,10 @@ import com.abdownloadmanager.shared.util.FileIconProvider
 import com.abdownloadmanager.shared.util.category.CategoryManager
 import com.abdownloadmanager.shared.util.category.rememberCategoryOf
 import com.abdownloadmanager.shared.util.ui.theme.myShapes
+import com.abdownloadmanager.shared.pages.home.QueuePositionInfo
 import ir.amirab.downloader.monitor.*
+import ir.amirab.downloader.queue.QueueManager
+import ir.amirab.downloader.downloaditem.DownloadJobStatus
 import ir.amirab.util.compose.resources.myStringResource
 import ir.amirab.util.compose.StringSource
 import ir.amirab.util.compose.asStringSource
@@ -47,7 +51,21 @@ import ir.amirab.util.desktop.isCtrlPressed
 import ir.amirab.util.desktop.isShiftPressed
 import ir.amirab.util.ifThen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
+/**
+ * Debounce delay for queue item drag-and-drop reordering in milliseconds.
+ *
+ * Prevents excessive queue update API calls during continuous dragging by
+ * batching rapid position changes into a single update.
+ *
+ * Value of 150ms is tuned to:
+ * - Feel responsive to user (< 200ms perceived as instant)
+ * - Avoid overwhelming QueueManager with updates
+ * - Allow smooth visual feedback during drag
+ */
+private const val DRAG_DEBOUNCE_MS = 150L
 
 class DownloadListContext(
     val onNewSelection: (List<Long>) -> Unit,
@@ -82,6 +100,8 @@ fun DownloadList(
     lastSelectedId: Long?,
     fileIconProvider: FileIconProvider,
     categoryManager: CategoryManager,
+    queuePositions: Map<Long, QueuePositionInfo>,
+    queueManager: QueueManager,
     lazyListState: LazyListState
 ) {
     ShowDownloadOptions(
@@ -103,6 +123,13 @@ fun DownloadList(
     )
 
     val tableInteractionSource = remember { MutableInteractionSource() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val queueIdByDownloadId = remember(downloadList, queuePositions) {
+        downloadList.associate { item ->
+            item.id to queuePositions[item.id]?.queueId
+        }
+    }
 
     fun newSelection(ids: List<Long>, isSelected: Boolean) {
         onNewSelection(ids.filter { isSelected })
@@ -113,6 +140,52 @@ fun DownloadList(
     }
 
     val windowInfo = LocalWindowInfo.current
+    var queueUpdateJob: kotlinx.coroutines.Job? by remember { mutableStateOf(null) }
+
+    // Only allow reordering when sorted by queue position ascending
+    val sortBy by tableState.sortBy.collectAsState()
+    val canReorder = sortBy?.cell is DownloadListCells.QueuePosition && sortBy?.isDescending() == false
+
+    val reorderableState = when {
+        !canReorder -> null
+        else -> rememberReorderableLazyListState(
+            lazyListState,
+            onMove = { from, to ->
+                val fromItem = downloadList.getOrNull(from.index)
+                val toItem = downloadList.getOrNull(to.index)
+                if (fromItem == null || toItem == null) {
+                    return@rememberReorderableLazyListState
+                }
+                val fromQueueId = queueIdByDownloadId[fromItem.id]
+                val toQueueId = queueIdByDownloadId[toItem.id]
+                if (fromQueueId == null || fromQueueId != toQueueId) {
+                    return@rememberReorderableLazyListState
+                }
+                // Thread-safety: QueueManager uses internal mutex for queue modifications
+                // Debouncing ensures we don't overwhelm the mutex with concurrent updates
+                // Cancel previous pending update and schedule a new one with debounce
+                queueUpdateJob?.cancel()
+                queueUpdateJob = coroutineScope.launch {
+                    delay(DRAG_DEBOUNCE_MS)
+
+                    runCatching {
+                        val queue = queueManager.queues.value.find { it.id == fromQueueId }
+                            ?: return@launch
+
+                        queue.swapQueueItem(
+                            item = fromItem.id,
+                            toPosition = { queueItems ->
+                                queueItems.indexOf(toItem.id)
+                            }
+                        )
+                    }.onFailure { error ->
+                        // swapQueueItem is defensive, but catch other potential issues
+                        println("Failed to swap queue items: ${error.message}")
+                    }
+                }
+            }
+        )
+    }
     CompositionLocalProvider(
         LocalDownloadListContext provides DownloadListContext(
             onNewSelection,
@@ -126,6 +199,9 @@ fun DownloadList(
             listState = lazyListState,
             key = { it.id },
             list = downloadList,
+            sortDependencies = listOf(queuePositions),
+            reorderableState = reorderableState,
+            isItemReorderable = { queueIdByDownloadId[it.id] != null },
             modifier = modifier
                 .onKeyEvent {
                     if (it.key == Key.A && isCtrlPressed(windowInfo)) {
@@ -292,6 +368,17 @@ fun DownloadList(
                     )
                 }
 
+                is DownloadListCells.QueuePosition -> {
+                    val positionInfo = queuePositions[item.id]
+                    positionInfo?.let {
+                        QueuePositionCell(
+                            position = it.position,
+                            queueColor = myColors.getQueueColor(it.queueId),
+                            isActive = item.statusOrFinished() is DownloadJobStatus.IsActive,
+                        )
+                    } ?: Box(Modifier.fillMaxSize())
+                }
+
                 DownloadListCells.Name -> {
                     NameCell(
                         itemState = item,
@@ -342,6 +429,18 @@ sealed interface DownloadListCells : TableCell<IDownloadItemState> {
                 modifier = Modifier.size(12.dp)
             )
         }
+    }
+
+    data class QueuePosition(
+        private val positionProvider: (Long) -> Int?
+    ) : DownloadListCells, SortableCell<IDownloadItemState> {
+        override fun comparator(): Comparator<IDownloadItemState> = compareBy {
+            positionProvider(it.id) ?: Int.MAX_VALUE
+        }
+
+        override val id: String = "QueuePosition"
+        override val name: StringSource = "#".asStringSource()
+        override val size: CellSize = CellSize.Fixed(60.dp)
     }
 
     data object Name : DownloadListCells,

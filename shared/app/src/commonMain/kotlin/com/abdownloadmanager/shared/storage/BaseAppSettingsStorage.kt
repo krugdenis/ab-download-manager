@@ -23,6 +23,8 @@ interface IAppSettingsModel {
     val showDownloadProgressDialog: Boolean
     val showDownloadCompletionDialog: Boolean
     val speedLimit: Long
+    val lastCustomSpeedLimit: Long
+    val speedSchedule: SpeedSchedule
     val autoStartOnBoot: Boolean
     val notificationSound: Boolean
     val defaultDownloadFolder: String
@@ -59,6 +61,8 @@ interface BaseAppSettingsStorage :
     val showDownloadProgressDialog: MutableStateFlow<Boolean>
     val showDownloadCompletionDialog: MutableStateFlow<Boolean>
     val speedLimit: MutableStateFlow<Long>
+    val lastCustomSpeedLimit: MutableStateFlow<Long>
+    val speedSchedule: MutableStateFlow<SpeedSchedule>
     val autoStartOnBoot: MutableStateFlow<Boolean>
     val notificationSound: MutableStateFlow<Boolean>
     val defaultDownloadFolder: MutableStateFlow<String>

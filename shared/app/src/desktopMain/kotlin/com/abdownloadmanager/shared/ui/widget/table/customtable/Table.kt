@@ -39,6 +39,8 @@ import ir.amirab.util.compose.resources.myStringResource
 import ir.amirab.util.shifted
 import kotlinx.coroutines.flow.*
 import sh.calvin.reorderable.ReorderableColumn
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.ReorderableListItemScope
 
 val LocalCellPadding = compositionLocalOf {
@@ -60,10 +62,13 @@ fun <T, C : TableCell<T>> Table(
     listState: LazyListState = rememberLazyListState(),
     horizontalScrollState: ScrollState = rememberScrollState(),
     resizeCellsOnResizeTableWidth: Boolean = false,
+    sortDependencies: List<Any> = emptyList(),
     renderHeaderCell: @Composable (C) -> Unit = { DefaultRenderHeader(it) },
     drawOnEmpty: @Composable BoxScope.() -> Unit = {},
     wrapHeader: @Composable TableScope.(rowContent: @Composable () -> Unit) -> Unit = { content -> content() },
     wrapItem: @Composable TableScope.(index: Int, item: T, rowContent: @Composable () -> Unit) -> Unit = { _, _, content -> content() },
+    reorderableState: ReorderableLazyListState? = null,
+    isItemReorderable: ((T) -> Boolean)? = null,
     renderCell: @Composable TableScope.(C, T) -> Unit,
 ) {
     val scope = TableScope
@@ -153,7 +158,7 @@ fun <T, C : TableCell<T>> Table(
                                 }
                             }
                         }
-                        val sortedList = remember(list, sortedBy) {
+                        val sortedList = remember(list, sortedBy, *sortDependencies.toTypedArray()) {
                             tableState.sortedList(list, sortedBy)
                         }
                         LazyColumn(
@@ -165,6 +170,34 @@ fun <T, C : TableCell<T>> Table(
                                 sortedList,
                                 key = if (key != null) { _, item -> key(item) } else null
                             ) { index, item ->
+                                if (reorderableState != null) {
+                                    val enabled = isItemReorderable?.invoke(item) ?: true
+                                    val itemKey = (key?.invoke(item) ?: item) as Any
+                                    ReorderableItem(
+                                        state = reorderableState,
+                                        key = itemKey,
+                                        enabled = enabled,
+                                    ) {
+                                        scope.wrapItem(index, item) {
+                                            val dragModifier = enabled.takeIf { it }?.let { Modifier.draggableHandle() } ?: Modifier
+                                            Row(
+                                                modifier = dragModifier,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                cells.forEach { cell ->
+                                                    Box(
+                                                        Modifier.width(customWidths[cell] ?: cell.size.defaultWidth)
+                                                            .padding(LocalCellPadding.current)
+                                                    ) {
+                                                        scope.renderCell(cell, item)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    return@itemsIndexed
+                                }
+
                                 scope.wrapItem(index, item) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically
