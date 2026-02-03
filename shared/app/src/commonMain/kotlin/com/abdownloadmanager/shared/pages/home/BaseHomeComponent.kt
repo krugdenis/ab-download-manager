@@ -26,6 +26,7 @@ import com.abdownloadmanager.shared.util.category.DefaultCategories
 import com.abdownloadmanager.shared.util.mvi.ContainsEffects
 import com.abdownloadmanager.shared.util.mvi.supportEffects
 import com.arkivanov.decompose.ComponentContext
+import androidx.compose.ui.graphics.Color
 import ir.amirab.downloader.DownloadManagerEvents
 import ir.amirab.downloader.db.QueueModel
 import ir.amirab.downloader.downloaditem.DownloadStatus
@@ -50,6 +51,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+
+data class QueuePositionInfo(
+    val queueId: Long,
+    val queueName: String,
+    val position: Int,
+)
 
 abstract class BaseHomeComponent(
     componentContext: ComponentContext,
@@ -216,6 +223,32 @@ abstract class BaseHomeComponent(
     val globalSpeedFlow = downloadSystem.downloadMonitor.activeDownloadListFlow.map {
         it.sumOf { it.speed }
     }
+
+    /**
+     * Maps download IDs to their queue position information.
+     *
+     * Thread-safety: QueueManager.queueModelsFlow() emits on a single thread,
+     * and the map transformation is pure (no shared state), so this flow is
+     * safe to collect from multiple coroutines.
+     */
+    val downloadQueuePositions = queueManager.queueModelsFlow()
+        .map { queues ->
+            buildMap<Long, QueuePositionInfo> {
+                queues.forEach { queue ->
+                    queue.queueItems.forEachIndexed { index, downloadId ->
+                        put(
+                            downloadId,
+                            QueuePositionInfo(
+                                queueId = queue.id,
+                                queueName = queue.name,
+                                position = index + 1,
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
 
     val activeDownloadList = downloadSystem.downloadMonitor.activeDownloadListFlow

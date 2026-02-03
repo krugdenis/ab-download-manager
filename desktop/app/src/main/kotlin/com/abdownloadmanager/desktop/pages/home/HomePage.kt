@@ -50,7 +50,9 @@ import com.abdownloadmanager.shared.ui.widget.*
 import com.abdownloadmanager.shared.ui.widget.menu.custom.MenuBar
 import com.abdownloadmanager.shared.ui.widget.menu.custom.ShowOptionsInPopup
 import com.abdownloadmanager.shared.ui.widget.menu.native.NativeMenuBar
+import com.abdownloadmanager.shared.ui.configurable.RenderSpinner
 import com.abdownloadmanager.shared.util.LocalSpeedUnit
+import com.abdownloadmanager.shared.util.SpeedLimitDefaults
 import com.abdownloadmanager.shared.util.category.Category
 import com.abdownloadmanager.shared.util.category.rememberIconPainter
 import com.abdownloadmanager.shared.util.convertPositiveBytesToSizeUnit
@@ -63,6 +65,15 @@ import com.abdownloadmanager.shared.util.ui.myColors
 import com.abdownloadmanager.shared.util.ui.theme.myShapes
 import com.abdownloadmanager.shared.util.ui.theme.myTextSizes
 import com.abdownloadmanager.shared.util.ui.widget.MyIcon
+import ir.amirab.util.datasize.SizeConverter
+import ir.amirab.util.datasize.SizeFactors
+import ir.amirab.util.datasize.SizeUnit
+import ir.amirab.util.datasize.SizeWithUnit
+import ir.amirab.util.datasize.asConverterConfig
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.layout.PaddingValues
 import ir.amirab.util.compose.IconSource
 import ir.amirab.util.compose.action.MenuItem
 import ir.amirab.util.compose.asStringSource
@@ -80,6 +91,7 @@ import java.io.File
 @Composable
 fun HomePage(component: HomeComponent) {
     val listState by component.downloadList.collectAsState()
+    val queuePositions by component.downloadQueuePositions.collectAsState()
     var isDragging by remember { mutableStateOf(false) }
 
     var showDeletePromptState by remember {
@@ -361,6 +373,8 @@ fun HomePage(component: HomeComponent) {
                         tableState = tableState,
                         fileIconProvider = component.fileIconProvider,
                         categoryManager = component.categoryManager,
+                        queuePositions = queuePositions,
+                        queueManager = component.queueManager,
                         lazyListState = lazyListState,
                     )
                     Spacer(
@@ -816,7 +830,8 @@ private fun HomeMenuBar(
 private fun Footer(component: HomeComponent) {
     Row(
         modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Spacer(Modifier.weight(1f))
         val activeCount by component.activeDownloadCountFlow.collectAsState()
@@ -828,12 +843,283 @@ private fun Footer(component: HomeComponent) {
             val unitText = speed.unit.toString() + "/s"
             FooterItem(MyIcons.speed, speedText, unitText)
         }
+
+        // Scheduler group
+        val schedule by component.speedSchedule.collectAsState()
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SchedulerToggleButton(component)
+            if (schedule.enabled) {
+                SchedulerLimitInlineEditor(component)
+            }
+        }
+
+        // Global limit group
+        val speedLimit by component.speedLimit.collectAsState()
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SpeedLimitToggleButton(component)
+            if (speedLimit > 0L) {
+                SpeedLimitInlineEditor(component)
+            }
+        }
     }
 }
 
 @Composable
+private fun SchedulerLimitInlineEditor(component: HomeComponent) {
+    val schedule by component.speedSchedule.collectAsState()
+    val displayBytes = schedule.alternativeSpeedLimit
+
+    val speedUnit = LocalSpeedUnit.current
+    val allowedFactors = listOf(
+        SizeFactors.FactorValue.Kilo,
+        SizeFactors.FactorValue.Mega,
+    )
+    val units = remember(speedUnit) {
+        allowedFactors.map {
+            SizeUnit(
+                factorValue = it,
+                baseSize = speedUnit.baseSize,
+                factors = speedUnit.factors
+            )
+        }
+    }
+
+    var currentUnit by remember(displayBytes, speedUnit) {
+        mutableStateOf(
+            SizeConverter.bytesToSize(
+                displayBytes,
+                speedUnit.copy(acceptedFactors = allowedFactors)
+            ).unit
+        )
+    }
+    var currentValue by remember(displayBytes, currentUnit) {
+        val v = SizeConverter.bytesToSize(displayBytes, currentUnit.asConverterConfig())
+            .formatedValue()
+            .toDouble()
+        mutableStateOf(v)
+    }
+
+    fun applySchedulerLimit(value: Double, unit: SizeUnit) {
+        val bytes = SizeConverter.sizeToBytes(SizeWithUnit(value, unit))
+        if (bytes <= 0L) {
+            component.setSchedulerLimit(SpeedLimitDefaults.MIN_LIMIT_BYTES)
+            return
+        }
+        component.setSchedulerLimit(bytes.coerceAtLeast(SpeedLimitDefaults.MIN_LIMIT_BYTES))
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NumberTextField(
+            value = currentValue,
+            onValueChange = {
+                currentValue = it
+                applySchedulerLimit(it, currentUnit)
+            },
+            enc = { currentValue + it * 1.0 },
+            toValue = { it.toDoubleOrNull() },
+            fromValue = { it.toString() },
+            range = 0.0..1_000.0,
+            modifier = Modifier
+                .width(54.dp)
+                .height(28.dp)
+                .focusProperties { canFocus = false },
+            enabled = true,
+            keyboardOptions = KeyboardOptions.Default.copy(
+                keyboardType = KeyboardType.Decimal
+            ),
+            keyboardActions = KeyboardActions.Default,
+            textPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp),
+            shape = myShapes.defaultRounded,
+        )
+        Spacer(Modifier.width(4.dp))
+        RenderSpinner(
+            possibleValues = units,
+            value = currentUnit,
+            modifier = Modifier
+                .width(54.dp)
+                .height(28.dp)
+                .focusProperties { canFocus = false },
+            onSelect = {
+                currentUnit = it
+                applySchedulerLimit(currentValue, it)
+            }
+        ) { unit ->
+            val prettified = remember(unit) { "$unit/s" }
+            Text(prettified, fontSize = myTextSizes.xs)
+        }
+    }
+}
+
+@Composable
+private fun SpeedLimitInlineEditor(component: HomeComponent) {
+    val speedLimit by component.speedLimit.collectAsState()
+    val lastCustomLimit by component.lastCustomSpeedLimit.collectAsState()
+    val displayBytes = if (speedLimit > 0L) speedLimit else lastCustomLimit
+
+    val speedUnit = LocalSpeedUnit.current
+    val allowedFactors = listOf(
+        SizeFactors.FactorValue.Kilo,
+        SizeFactors.FactorValue.Mega,
+    )
+    val units = remember(speedUnit) {
+        allowedFactors.map {
+            SizeUnit(
+                factorValue = it,
+                baseSize = speedUnit.baseSize,
+                factors = speedUnit.factors
+            )
+        }
+    }
+
+    var currentUnit by remember(displayBytes, speedUnit) {
+        mutableStateOf(
+            SizeConverter.bytesToSize(
+                displayBytes,
+                speedUnit.copy(acceptedFactors = allowedFactors)
+            ).unit
+        )
+    }
+    var currentValue by remember(displayBytes, currentUnit) {
+        val v = SizeConverter.bytesToSize(displayBytes, currentUnit.asConverterConfig())
+            .formatedValue()
+            .toDouble()
+        mutableStateOf(v)
+    }
+
+    fun applySpeedLimit(value: Double, unit: SizeUnit) {
+        val bytes = SizeConverter.sizeToBytes(SizeWithUnit(value, unit))
+        if (bytes <= 0L) {
+            component.setSpeedLimit(0L)
+            return
+        }
+        component.setSpeedLimit(bytes.coerceAtLeast(SpeedLimitDefaults.MIN_LIMIT_BYTES))
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NumberTextField(
+            value = currentValue,
+            onValueChange = {
+                currentValue = it
+                applySpeedLimit(it, currentUnit)
+            },
+            enc = { currentValue + it * 1.0 },
+            toValue = { it.toDoubleOrNull() },
+            fromValue = { it.toString() },
+            range = 0.0..1_000.0,
+            modifier = Modifier
+                .width(54.dp)
+                .height(28.dp)
+                .focusProperties { canFocus = false },
+            enabled = true,
+            keyboardOptions = KeyboardOptions.Default.copy(
+                keyboardType = KeyboardType.Decimal
+            ),
+            keyboardActions = KeyboardActions.Default,
+            textPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp),
+            shape = myShapes.defaultRounded,
+        )
+        Spacer(Modifier.width(4.dp))
+        RenderSpinner(
+            possibleValues = units,
+            value = currentUnit,
+            modifier = Modifier
+                .width(54.dp)
+                .height(28.dp)
+                .focusProperties { canFocus = false },
+            onSelect = {
+                currentUnit = it
+                applySpeedLimit(currentValue, it)
+            }
+        ) { unit ->
+            val prettified = remember(unit) { "$unit/s" }
+            Text(prettified, fontSize = myTextSizes.xs)
+        }
+    }
+}
+
+@Composable
+private fun SchedulerToggleButton(component: HomeComponent) {
+    val schedule by component.speedSchedule.collectAsState()
+    val isSchedulerActive by component.isSchedulerActive.collectAsState()
+    val isEnabled = schedule.enabled
+
+    @Composable
+    fun getTooltipText(): String {
+        if (isSchedulerActive) {
+            val limit = convertPositiveBytesToSizeUnit(schedule.alternativeSpeedLimit, LocalSpeedUnit.current)
+            val formattedValue = limit?.formatedValue() ?: "?"
+            val unitText = limit?.unit?.toString() ?: "-"
+            return "Scheduler active: $formattedValue $unitText/s (click to disable)"
+        }
+        if (isEnabled) {
+            return "Scheduler: Inactive (waiting for scheduled time)"
+        }
+        return "Scheduler: Disabled (click to enable)"
+    }
+
+    IconActionButton(
+        onClick = { component.toggleScheduler() },
+        icon = MyIcons.clock,
+        contentDescription = getTooltipText().asStringSource(),
+        indicateActive = isSchedulerActive,
+        focusedBorderColor = myColors.warning,
+        modifier = Modifier
+            .size(28.dp)
+            .focusProperties { canFocus = false }
+    )
+}
+
+@Composable
+private fun SpeedLimitToggleButton(component: HomeComponent) {
+    val speedLimit by component.speedLimit.collectAsState()
+    val isSchedulerActive by component.isSchedulerActive.collectAsState()
+    val isEnabled = speedLimit > 0L
+
+    val tooltipText = buildString {
+        if (!isEnabled) {
+            append("Global limit: Off")
+            if (isSchedulerActive) {
+                append(" (scheduler is active)")
+            }
+            return@buildString
+        }
+
+        val limit = convertPositiveBytesToSizeUnit(speedLimit, LocalSpeedUnit.current)
+        val formattedValue = limit?.formatedValue() ?: "?"
+        val unitText = limit?.unit?.toString() ?: "-"
+        append("Global limit: $formattedValue $unitText/s")
+        if (isSchedulerActive) {
+            append(" (overridden by scheduler)")
+        }
+    }
+
+    IconActionButton(
+        onClick = { component.toggleSpeedLimit() },
+        icon = MyIcons.fast,
+        contentDescription = tooltipText.asStringSource(),
+        indicateActive = isEnabled,
+        modifier = Modifier
+            .size(28.dp)
+            .focusProperties { canFocus = false }
+    )
+}
+
+@Composable
 private fun FooterItem(icon: IconSource, value: String, unit: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.height(28.dp)
+    ) {
         WithContentAlpha(0.25f) {
             MyIcon(icon, null, Modifier.size(16.dp))
         }

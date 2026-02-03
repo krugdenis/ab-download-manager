@@ -6,7 +6,9 @@ import arrow.optics.optics
 import com.abdownloadmanager.shared.storage.BaseAppSettingsStorage
 import com.abdownloadmanager.shared.storage.IAppSettingsModel
 import com.abdownloadmanager.shared.storage.SupportedSizeUnits
+import com.abdownloadmanager.shared.storage.SpeedSchedule
 import com.abdownloadmanager.shared.ui.theme.ThemeSettingsStorage
+import com.abdownloadmanager.shared.util.SpeedLimitDefaults
 import com.abdownloadmanager.shared.util.downloadlocation.PlatformDownloadLocationProvider
 import com.abdownloadmanager.shared.util.ConfigBaseSettingsByMapConfig
 import com.abdownloadmanager.shared.util.SystemDownloadLocationProvider
@@ -15,6 +17,9 @@ import ir.amirab.util.compose.localizationmanager.LanguageStorage
 import ir.amirab.util.config.*
 import ir.amirab.util.enumValueOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 
 @optics([arrow.optics.OpticsTarget.LENS])
@@ -41,6 +46,8 @@ data class AppSettingsModel(
     override val showDownloadProgressDialog: Boolean = true,
     override val showDownloadCompletionDialog: Boolean = true,
     override val speedLimit: Long = 0,
+    override val lastCustomSpeedLimit: Long = SpeedLimitDefaults.MIN_LIMIT_BYTES,
+    override val speedSchedule: SpeedSchedule = SpeedSchedule.default(),
     override val autoStartOnBoot: Boolean = true,
     override val notificationSound: Boolean = true,
     override val defaultDownloadFolder: String = PlatformDownloadLocationProvider
@@ -62,6 +69,10 @@ data class AppSettingsModel(
     }
 
     object ConfigLens : Lens<MapConfig, AppSettingsModel>, KoinComponent {
+        private val speedScheduleJson = Json {
+            ignoreUnknownKeys = true
+        }
+
         object Keys {
             val theme = stringKeyOf("theme")
             val defaultDarkTheme = stringKeyOf("defaultDarkTheme")
@@ -84,6 +95,8 @@ data class AppSettingsModel(
             val showDownloadProgressDialog = booleanKeyOf("showDownloadProgressDialog")
             val showDownloadCompletionDialog = booleanKeyOf("showDownloadCompletionDialog")
             val speedLimit = longKeyOf("speedLimit")
+            val lastCustomSpeedLimit = longKeyOf("lastCustomSpeedLimit")
+            val speedSchedule = stringKeyOf("speedSchedule")
             val autoStartOnBoot = booleanKeyOf("autoStartOnBoot")
             val notificationSound = booleanKeyOf("notificationSound")
             val defaultDownloadFolder = stringKeyOf("defaultDownloadFolder")
@@ -128,6 +141,11 @@ data class AppSettingsModel(
                 showDownloadCompletionDialog = source.get(Keys.showDownloadCompletionDialog)
                     ?: default.showDownloadCompletionDialog,
                 speedLimit = source.get(Keys.speedLimit) ?: default.speedLimit,
+                lastCustomSpeedLimit = source.get(Keys.lastCustomSpeedLimit) ?: default.lastCustomSpeedLimit,
+                speedSchedule = source.get(Keys.speedSchedule)?.let { raw ->
+                    runCatching { speedScheduleJson.decodeFromString<SpeedSchedule>(raw) }
+                        .getOrNull()
+                } ?: default.speedSchedule,
                 autoStartOnBoot = source.get(Keys.autoStartOnBoot) ?: default.autoStartOnBoot,
                 notificationSound = source.get(Keys.notificationSound) ?: default.notificationSound,
                 defaultDownloadFolder = source.get(Keys.defaultDownloadFolder) ?: default.defaultDownloadFolder,
@@ -168,6 +186,8 @@ data class AppSettingsModel(
                 put(Keys.showDownloadProgressDialog, focus.showDownloadProgressDialog)
                 put(Keys.showDownloadCompletionDialog, focus.showDownloadCompletionDialog)
                 put(Keys.speedLimit, focus.speedLimit)
+                put(Keys.lastCustomSpeedLimit, focus.lastCustomSpeedLimit)
+                put(Keys.speedSchedule, speedScheduleJson.encodeToString(focus.speedSchedule))
                 put(Keys.autoStartOnBoot, focus.autoStartOnBoot)
                 put(Keys.notificationSound, focus.notificationSound)
                 put(Keys.defaultDownloadFolder, focus.defaultDownloadFolder)
@@ -215,6 +235,16 @@ private val languageLens: Lens<AppSettingsModel, String?>
         }
     )
 
+private val speedScheduleLens: Lens<AppSettingsModel, SpeedSchedule>
+    get() = Lens(
+        get = {
+            it.speedSchedule
+        },
+        set = { s, f ->
+            s.copy(speedSchedule = f)
+        }
+    )
+
 class AppSettingsStorage(
     settings: DataStore<MapConfig>,
 ) : BaseAppSettingsStorage,
@@ -241,6 +271,8 @@ class AppSettingsStorage(
     override val showDownloadProgressDialog = from(AppSettingsModel.showDownloadProgressDialog)
     override val showDownloadCompletionDialog = from(AppSettingsModel.showDownloadCompletionDialog)
     override val speedLimit = from(AppSettingsModel.speedLimit)
+    override val lastCustomSpeedLimit = from(AppSettingsModel.lastCustomSpeedLimit)
+    override val speedSchedule = from(speedScheduleLens)
     override val autoStartOnBoot = from(AppSettingsModel.autoStartOnBoot)
     override val notificationSound = from(AppSettingsModel.notificationSound)
     override val defaultDownloadFolder = from(AppSettingsModel.defaultDownloadFolder)

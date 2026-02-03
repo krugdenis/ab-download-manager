@@ -27,6 +27,7 @@ import com.abdownloadmanager.shared.ui.widget.CheckBox
 import com.abdownloadmanager.shared.ui.widget.DoubleTextField
 import com.abdownloadmanager.shared.ui.widget.Text
 import com.abdownloadmanager.shared.util.LocalSpeedUnit
+import com.abdownloadmanager.shared.util.SpeedLimitDefaults
 import ir.amirab.util.datasize.SizeConverter
 import ir.amirab.util.datasize.SizeFactors
 import ir.amirab.util.datasize.SizeUnit
@@ -46,6 +47,7 @@ object SpeedLimitConfigurableRenderer : ConfigurableRenderer<SpeedLimitConfigura
     private fun RenderSpeedConfig(cfg: SpeedLimitConfigurable, configurableUiProps: ConfigurableUiProps) {
         val value by cfg.stateFlow.collectAsState()
         val setValue = cfg::set
+        val lastCustomLimit = cfg.lastCustomLimit
 
         val speedUnit = LocalSpeedUnit.current
         val allowedFactors = listOf(
@@ -131,18 +133,22 @@ object SpeedLimitConfigurableRenderer : ConfigurableRenderer<SpeedLimitConfigura
                 CheckBox(
                     value = hasLimitSpeed,
                     enabled = enabled,
-                    onValueChange = {
-                        if (it) {
-                            setValue(
-                                SizeConverter.sizeToBytes(
-                                    SizeWithUnit(
-                                        256.0, currentUnit
-                                    )
+                    onValueChange = { checked ->
+                        if (!checked) {
+                            if (lastCustomLimit != null && value > 0L) {
+                                lastCustomLimit.value = value
+                            }
+                            setValue(0)
+                            return@CheckBox
+                        }
+                        val restored = lastCustomLimit?.value
+                            ?.coerceAtLeast(SpeedLimitDefaults.MIN_LIMIT_BYTES)
+                            ?: SizeConverter.sizeToBytes(
+                                SizeWithUnit(
+                                    256.0, currentUnit
                                 )
                             )
-                        } else {
-                            setValue(0)
-                        }
+                        setValue(restored)
                     })
             }
         )

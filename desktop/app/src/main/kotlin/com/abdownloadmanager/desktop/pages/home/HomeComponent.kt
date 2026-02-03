@@ -11,6 +11,7 @@ import com.abdownloadmanager.shared.ui.widget.table.customtable.TableState
 import com.abdownloadmanager.desktop.utils.*
 import ir.amirab.util.compose.action.MenuItem
 import ir.amirab.util.compose.action.buildMenu
+import ir.amirab.util.compose.action.simpleAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ import com.abdownloadmanager.shared.pagemanager.FileChecksumDialogManager
 import com.abdownloadmanager.shared.pagemanager.NotificationSender
 import com.abdownloadmanager.shared.pagemanager.QueuePageManager
 import com.abdownloadmanager.shared.pages.home.BaseHomeComponent
+import com.abdownloadmanager.shared.repository.BaseAppRepository
 import com.abdownloadmanager.shared.util.*
 import com.abdownloadmanager.shared.util.FileIconProvider
 import com.abdownloadmanager.shared.util.category.CategoryManager
@@ -91,10 +93,37 @@ class HomeComponent(
     KoinComponent {
     private val pageStorage: PageStatesStorage by inject()
     private val appSettings: AppSettingsStorage by inject()
+    private val appRepository: BaseAppRepository by inject()
     private val updateManager: UpdateManager by inject()
     private val appVersionTracker: AppVersionTracker by inject()
     val mergeTopBarWithTitleBar = appSettings.mergeTopBarWithTitleBar
     val useNativeMenuBar = appSettings.useNativeMenuBar
+    val speedLimit = appRepository.speedLimiter
+    val lastCustomSpeedLimit = appRepository.lastCustomSpeedLimit
+    val effectiveSpeedLimit = appRepository.effectiveSpeedLimit
+    val speedSchedule = appRepository.speedSchedule
+    val isSchedulerActive = combine(
+        appRepository.speedSchedule,
+        appRepository.isSchedulerActive
+    ) { schedule, isActive ->
+        schedule.enabled && isActive
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    fun toggleSpeedLimit() {
+        appRepository.toggleSpeedLimit()
+    }
+
+    fun toggleScheduler() {
+        appRepository.toggleScheduler()
+    }
+
+    fun setSpeedLimit(value: Long) {
+        appRepository.speedLimiter.value = value
+    }
+
+    fun setSchedulerLimit(value: Long) {
+        appRepository.setSchedulerLimit(value)
+    }
 
     private val homePageStateToPersist = MutableStateFlow(pageStorage.homePageStorage.value)
 
@@ -216,7 +245,6 @@ class HomeComponent(
             +openTranslators
             +donate
             separator()
-            +checkForUpdateAction
             +openAboutAction
         }
     }.filterIsInstance<MenuItem.SubMenu>()
@@ -248,9 +276,14 @@ class HomeComponent(
         }
     }
 
+    private val queuePositionCell = DownloadListCells.QueuePosition { downloadId ->
+        downloadQueuePositions.value[downloadId]?.position
+    }
+
     val tableState = TableState(
         cells = listOf(
             DownloadListCells.Check,
+            queuePositionCell,
             DownloadListCells.Name,
             DownloadListCells.Size,
             DownloadListCells.Status,
@@ -259,12 +292,21 @@ class HomeComponent(
             DownloadListCells.DateAdded,
         ),
         forceVisibleCells = listOf(
+            queuePositionCell,
             DownloadListCells.Name,
         ),
         initialSortBy = Sort(DownloadListCells.DateAdded, Sort.DEFAULT_IS_DESCENDING)
     ).apply {
         homePageStateToPersist.value.downloadListState?.let {
             load(it)
+        }
+        setOrder { order ->
+            val withoutQueue = order.filterNot { it is DownloadListCells.QueuePosition }
+            val checkIndex = withoutQueue.indexOf(DownloadListCells.Check)
+            val insertIndex = if (checkIndex >= 0) checkIndex + 1 else 0
+            withoutQueue.toMutableList().apply {
+                add(insertIndex, queuePositionCell)
+            }
         }
         onPropChange.onEach {
             homePageStateToPersist.update {
@@ -383,6 +425,66 @@ class HomeComponent(
         }
     }
 
+    private val moveUpInQueueAction = simpleAction(
+        title = Res.string.move_up.asStringSource(),
+        icon = MyIcons.up,
+        checkEnable = combineStateFlows(
+            selectionList,
+            downloadQueuePositions,
+        ) { selections, queuePositions ->
+            if (selections.isEmpty()) return@combineStateFlows false
+            val queueIds = selections.mapNotNull { queuePositions[it]?.queueId }.toSet()
+            queueIds.size == 1 // All selected items must be in the same queue
+        },
+        onActionPerformed = {
+            scope.launch {
+                // Auto-sort by queue position if not already
+                val currentSort = tableState.sortBy.value
+                if (currentSort?.cell !is DownloadListCells.QueuePosition || currentSort.isDescending()) {
+                    tableState.setSortBy(Sort(queuePositionCell, false))
+                }
+
+                val selections = selectionList.value
+                if (selections.isEmpty()) return@launch
+                val queueIds = selections.mapNotNull { downloadQueuePositions.value[it]?.queueId }.toSet()
+                if (queueIds.size != 1) return@launch
+                val queueId = queueIds.first()
+                val queue = queueManager.queues.value.find { it.id == queueId } ?: return@launch
+                queue.moveUp(selections)
+            }
+        }
+    )
+
+    private val moveDownInQueueAction = simpleAction(
+        title = Res.string.move_down.asStringSource(),
+        icon = MyIcons.down,
+        checkEnable = combineStateFlows(
+            selectionList,
+            downloadQueuePositions,
+        ) { selections, queuePositions ->
+            if (selections.isEmpty()) return@combineStateFlows false
+            val queueIds = selections.mapNotNull { queuePositions[it]?.queueId }.toSet()
+            queueIds.size == 1 // All selected items must be in the same queue
+        },
+        onActionPerformed = {
+            scope.launch {
+                // Auto-sort by queue position if not already
+                val currentSort = tableState.sortBy.value
+                if (currentSort?.cell !is DownloadListCells.QueuePosition || currentSort.isDescending()) {
+                    tableState.setSortBy(Sort(queuePositionCell, false))
+                }
+
+                val selections = selectionList.value
+                if (selections.isEmpty()) return@launch
+                val queueIds = selections.mapNotNull { downloadQueuePositions.value[it]?.queueId }.toSet()
+                if (queueIds.size != 1) return@launch
+                val queueId = queueIds.first()
+                val queue = queueManager.queues.value.find { it.id == queueId } ?: return@launch
+                queue.moveDown(selections)
+            }
+        }
+    )
+
     private val downloadActions = DesktopDownloadActions(
         scope = scope,
         downloadSystem = downloadSystem,
@@ -423,6 +525,9 @@ class HomeComponent(
         separator()
         +downloadActions.resumeAction
         +downloadActions.pauseAction
+        separator()
+        +moveUpInQueueAction
+        +moveDownInQueueAction
         separator()
         +startQueueGroupAction
         +stopQueueGroupAction

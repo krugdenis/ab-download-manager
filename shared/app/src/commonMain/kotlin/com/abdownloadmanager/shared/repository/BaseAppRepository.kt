@@ -5,6 +5,8 @@ import com.abdownloadmanager.shared.storage.SupportedSizeUnits
 import com.abdownloadmanager.shared.util.AutoStartManager
 import com.abdownloadmanager.shared.util.SizeAndSpeedUnitProvider
 import com.abdownloadmanager.shared.util.DownloadSystem
+import com.abdownloadmanager.shared.util.SpeedLimitDefaults
+import com.abdownloadmanager.shared.util.SpeedLimitScheduler
 import com.abdownloadmanager.shared.util.autoremove.RemovedDownloadsFromDiskTracker
 import com.abdownloadmanager.shared.util.category.CategoryManager
 import com.abdownloadmanager.shared.util.proxy.ProxyManager
@@ -15,9 +17,13 @@ import ir.amirab.util.datasize.ConvertSizeConfig
 import ir.amirab.util.flow.mapStateFlow
 import ir.amirab.util.flow.withPrevious
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 
 open class BaseAppRepository(
     protected val scope: CoroutineScope,
@@ -35,6 +41,33 @@ open class BaseAppRepository(
 
 
     val speedLimiter = appSettings.speedLimit
+    val lastCustomSpeedLimit = appSettings.lastCustomSpeedLimit
+    val speedSchedule = appSettings.speedSchedule
+    private val speedLimitScheduler = SpeedLimitScheduler(
+        scope = scope,
+        scheduleFlow = speedSchedule,
+    )
+    val isSchedulerActive: StateFlow<Boolean> = speedLimitScheduler.isScheduleActive
+
+    /**
+     * The actual speed limit applied to downloads.
+     * Returns scheduler's alternative limit when schedule is active and enabled,
+     * otherwise returns the global limit.
+     */
+    val effectiveSpeedLimit: StateFlow<Long> = combine(
+        speedLimiter,
+        speedSchedule,
+        speedLimitScheduler.isScheduleActive
+    ) { globalLimit, schedule, isScheduleActive ->
+        when {
+            schedule.enabled && isScheduleActive -> schedule.alternativeSpeedLimit
+            else -> globalLimit
+        }
+    }.stateIn(
+        scope = scope,
+        started = SharingStarted.Eagerly,
+        initialValue = speedLimiter.value
+    )
     val threadCount = appSettings.threadCount
     val dynamicPartCreation = appSettings.dynamicPartCreation
     val useServerLastModifiedTime = appSettings.useServerLastModifiedTime
@@ -71,6 +104,34 @@ open class BaseAppRepository(
         updateDownloadSettings()
     }
 
+    /**
+     * Toggle speed limit between unlimited (0) and last custom value.
+     * Preserves the previous non-zero limit for easy restoration.
+     */
+    fun toggleSpeedLimit() {
+        val currentLimit = speedLimiter.value
+        if (currentLimit == 0L) {
+            val restoredLimit = lastCustomSpeedLimit.value
+                .coerceAtLeast(SpeedLimitDefaults.MIN_LIMIT_BYTES)
+            speedLimiter.value = restoredLimit
+            return
+        }
+        lastCustomSpeedLimit.value = currentLimit
+        speedLimiter.value = 0L
+    }
+
+    fun toggleScheduler() {
+        speedSchedule.value = speedSchedule.value.copy(
+            enabled = !speedSchedule.value.enabled
+        )
+    }
+
+    fun setSchedulerLimit(value: Long) {
+        speedSchedule.value = speedSchedule.value.copy(
+            alternativeSpeedLimit = value
+        )
+    }
+
     private fun updateDownloadSettings() {
         downloadSettings.defaultThreadCount = threadCount.value
         downloadSettings.dynamicPartCreationMode = dynamicPartCreation.value
@@ -78,7 +139,12 @@ open class BaseAppRepository(
         downloadSettings.appendExtensionToIncompleteDownloads = appendExtensionToIncompleteDownloads.value
         downloadSettings.useSparseFileAllocation = useSparseFileAllocation.value
         downloadSettings.maxDownloadRetryCount = maxDownloadRetryCount.value
-        downloadSettings.globalSpeedLimit = speedLimiter.value
+        downloadSettings.globalSpeedLimit = effectiveSpeedLimit.value
+    }
+
+    private fun applySpeedLimitNow(limit: Long) {
+        downloadSettings.globalSpeedLimit = limit
+        downloadManager.limitGlobalSpeed(limit)
     }
 
     init {
@@ -100,11 +166,22 @@ open class BaseAppRepository(
             .onEach { enabled ->
                 AutoStartManager.startOnBoot(enabled)
             }.launchIn(scope)
+        // Observer 1: Apply effective limit to download engine
+        effectiveSpeedLimit
+            .debounce(500)
+            .onEach { effectiveLimit ->
+                applySpeedLimitNow(effectiveLimit)
+            }.launchIn(scope)
+        // Observer 2: Update lastCustomSpeedLimit when user changes global limit (only when scheduler is NOT active)
         speedLimiter
             .debounce(500)
-            .onEach {
-                downloadSettings.globalSpeedLimit = it
-                downloadManager.limitGlobalSpeed(it)
+            .onEach { newLimit ->
+                val schedule = speedSchedule.value
+                val scheduleActive = schedule.enabled && speedLimitScheduler.isScheduleActive.value
+
+                if (!scheduleActive && newLimit > 0L) {
+                    lastCustomSpeedLimit.value = newLimit
+                }
             }.launchIn(scope)
         useAverageSpeed
             .debounce(500)
@@ -157,5 +234,6 @@ open class BaseAppRepository(
                     removedDownloadsFromDiskTracker.stop()
                 }
             }.launchIn(scope)
+        speedLimitScheduler.start()
     }
 }

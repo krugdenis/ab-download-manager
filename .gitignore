@@ -4,8 +4,12 @@
 
 # Ignore Gradle build output directory
 build
+bin
 .idea
 local.properties
+
+# IDE specific
+.vscode
 
 # Ignore android keystores
 *.jks
