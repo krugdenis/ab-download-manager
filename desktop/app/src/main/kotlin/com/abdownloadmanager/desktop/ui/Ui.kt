@@ -28,7 +28,6 @@ import com.abdownloadmanager.desktop.pages.queue.QueuesWindow
 import com.abdownloadmanager.desktop.pages.settings.FontManager
 import com.abdownloadmanager.desktop.pages.settings.SettingWindow
 import com.abdownloadmanager.desktop.pages.singleDownloadPage.ShowDownloadDialogs
-import com.abdownloadmanager.desktop.pages.updater.ShowUpdaterDialog
 import com.abdownloadmanager.desktop.ui.configurable.comon.CommonConfigurableRenderersForDesktop
 import com.abdownloadmanager.desktop.ui.configurable.platform.PlatformConfigurableRenderersForDesktop
 import com.abdownloadmanager.desktop.ui.widget.ShowMessageDialogs
@@ -118,7 +117,6 @@ object Ui : KoinComponent {
                 ShowDownloadDialogs(appComponent)
                 ShowCategoryDialogs(appComponent)
                 FileChecksumWindow(appComponent)
-                ShowUpdaterDialog(appComponent.updater)
                 ShowAboutDialog(appComponent)
                 NewQueueDialog(appComponent)
                 ShowMessageDialogs(appComponent)

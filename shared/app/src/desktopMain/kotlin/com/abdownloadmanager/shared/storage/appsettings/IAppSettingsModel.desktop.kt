@@ -1,6 +1,7 @@
 package com.abdownloadmanager.shared.storage.appsettings
 
 import arrow.optics.optics
+import com.abdownloadmanager.shared.storage.SpeedSchedule
 import com.abdownloadmanager.shared.storage.SupportedSizeUnits
 import io.github.amir1376.schemakt.S
 import io.github.amir1376.schemakt.schema.composite.TypeSafeObjectSchema
@@ -32,6 +33,8 @@ data class AppSettingsModel(
     override val showDownloadProgressDialog: Boolean,
     override val showDownloadCompletionDialog: Boolean,
     override val speedLimit: Long,
+    override val lastCustomSpeedLimit: Long,
+    override val speedSchedule: SpeedSchedule,
     override val autoStartOnBoot: Boolean,
     override val notificationSound: Boolean,
     override val generalNotificationSound: String,
@@ -87,6 +90,8 @@ val DesktopSettingsSchema = S.typeSafeObject(
             showDownloadProgressDialog = it[AppSettingsModel::showDownloadProgressDialog],
             showDownloadCompletionDialog = it[AppSettingsModel::showDownloadCompletionDialog],
             speedLimit = it[AppSettingsModel::speedLimit],
+            lastCustomSpeedLimit = it[AppSettingsModel::lastCustomSpeedLimit],
+            speedSchedule = it[AppSettingsModel::speedSchedule],
             autoStartOnBoot = it[AppSettingsModel::autoStartOnBoot],
             notificationSound = it[AppSettingsModel::notificationSound],
             generalNotificationSound = it[AppSettingsModel::generalNotificationSound],

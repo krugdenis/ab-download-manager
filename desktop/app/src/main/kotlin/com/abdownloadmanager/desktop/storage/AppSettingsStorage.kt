@@ -65,6 +65,8 @@ class AppSettingsStorage(
     override val showDownloadProgressDialog = from(AppSettingsModel.showDownloadProgressDialog)
     override val showDownloadCompletionDialog = from(AppSettingsModel.showDownloadCompletionDialog)
     override val speedLimit = from(AppSettingsModel.speedLimit)
+    override val lastCustomSpeedLimit = from(AppSettingsModel.lastCustomSpeedLimit)
+    override val speedSchedule = from(AppSettingsModel.speedSchedule)
     override val autoStartOnBoot = from(AppSettingsModel.autoStartOnBoot)
     override val notificationSound = from(AppSettingsModel.notificationSound)
     override val generalNotificationSound = from(AppSettingsModel.generalNotificationSound)

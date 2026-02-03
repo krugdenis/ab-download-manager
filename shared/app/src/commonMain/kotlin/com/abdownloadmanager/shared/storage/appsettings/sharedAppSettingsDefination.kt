@@ -1,5 +1,6 @@
 package com.abdownloadmanager.shared.storage.appsettings
 
+import com.abdownloadmanager.shared.storage.SpeedScheduleSchema
 import com.abdownloadmanager.shared.storage.SupportedSizeUnits
 import com.abdownloadmanager.shared.util.MaximumDownloadRetriesLimitation
 import com.abdownloadmanager.shared.util.schemakt.enum
@@ -49,6 +50,10 @@ object BaseAppSettingsDefinition {
         prop(IAppSettingsModel::showDownloadCompletionDialog) bind S.boolean()
             .catch(PlatformDefaultSettings::showDownloadCompletionDialog)
         prop(IAppSettingsModel::speedLimit) bind S.long().min(0L).catch(PlatformDefaultSettings::speedLimit)
+        prop(IAppSettingsModel::lastCustomSpeedLimit) bind S.long()
+            .catch(PlatformDefaultSettings::lastCustomSpeedLimit)
+        prop(IAppSettingsModel::speedSchedule) bind SpeedScheduleSchema
+            .catch(PlatformDefaultSettings::speedSchedule)
         prop(IAppSettingsModel::autoStartOnBoot) bind S.boolean().catch(PlatformDefaultSettings::autoStartOnBoot)
         prop(IAppSettingsModel::notificationSound) bind S.boolean().catch(PlatformDefaultSettings::notificationSound)
         prop(IAppSettingsModel::generalNotificationSound) bind S.string()

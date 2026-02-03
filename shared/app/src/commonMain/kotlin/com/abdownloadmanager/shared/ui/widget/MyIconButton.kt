@@ -57,6 +57,7 @@ fun IconActionButton(
     contentColor: Color = LocalContentColor.current,
     borderColor: Color = myColors.onBackground / 10,
     disabledBorderColor: Color = myColors.onBackground / 10,
+    focusedBorderColor: Color = myColors.focusedBorderColor,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     automaticMirrorIcon: Boolean = true,
     iconSize: Dp = mySpacings.iconSize,
@@ -75,6 +76,7 @@ fun IconActionButton(
         contentColor = contentColor,
         borderColor = SolidColor(borderColor),
         disabledBorderColor = SolidColor(disabledBorderColor),
+        focusedBorderColor = focusedBorderColor,
         interactionSource = interactionSource,
         automaticMirrorIcon = automaticMirrorIcon,
         iconSize = iconSize,
@@ -96,6 +98,7 @@ fun IconActionButtonWithBrush(
     contentColor: Color = LocalContentColor.current,
     borderColor: Brush = SolidColor(myColors.onBackground / 10),
     disabledBorderColor: Brush = SolidColor(myColors.onBackground / 10),
+    focusedBorderColor: Color = myColors.focusedBorderColor,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     automaticMirrorIcon: Boolean = true,
     iconSize: Dp = mySpacings.iconSize,
@@ -119,7 +122,7 @@ fun IconActionButtonWithBrush(
                     .ifThen(isActiveOrFocused || requiresAttention) {
                         border(
                             1.dp,
-                            myColors.focusedBorderColor / if (isActiveOrFocused) 1f else alphaFlicker(),
+                            focusedBorderColor / if (isActiveOrFocused) 1f else alphaFlicker(),
                             shape
                         )
                     }

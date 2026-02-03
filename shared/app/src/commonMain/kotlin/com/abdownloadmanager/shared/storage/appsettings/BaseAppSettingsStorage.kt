@@ -1,5 +1,6 @@
 package com.abdownloadmanager.shared.storage.appsettings
 
+import com.abdownloadmanager.shared.storage.SpeedSchedule
 import com.abdownloadmanager.shared.storage.SupportedSizeUnits
 import com.abdownloadmanager.shared.ui.theme.ThemeSettingsStorage
 import com.abdownloadmanager.shared.util.notification.INotificationSettingsStorage
@@ -30,6 +31,8 @@ interface BaseAppSettingsStorage :
     val showDownloadProgressDialog: MutableStateFlow<Boolean>
     val showDownloadCompletionDialog: MutableStateFlow<Boolean>
     val speedLimit: MutableStateFlow<Long>
+    val lastCustomSpeedLimit: MutableStateFlow<Long>
+    val speedSchedule: MutableStateFlow<SpeedSchedule>
     val autoStartOnBoot: MutableStateFlow<Boolean>
     override val notificationSound: MutableStateFlow<Boolean>
     override val generalNotificationSound: MutableStateFlow<String>

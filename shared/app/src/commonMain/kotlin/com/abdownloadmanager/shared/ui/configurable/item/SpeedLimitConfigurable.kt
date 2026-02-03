@@ -6,11 +6,19 @@ import ir.amirab.util.compose.StringSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+/**
+ * Configurable for speed limit settings with toggle functionality.
+ *
+ * @param lastCustomLimit Optional StateFlow to persist the last non-zero custom limit value.
+ *                        Used by the UI to restore previous limit when toggling from unlimited (0)
+ *                        back to limited mode. If null, the toggle functionality won't persist state.
+ */
 class SpeedLimitConfigurable(
     title: StringSource,
     description: StringSource,
     backedBy: MutableStateFlow<Long>,
     describe: (Long) -> StringSource,
+    val lastCustomLimit: MutableStateFlow<Long>? = null,
     enabled: StateFlow<Boolean> = DefaultEnabledValue,
     visible: StateFlow<Boolean> = DefaultVisibleValue,
 ) : BaseLongConfigurable(

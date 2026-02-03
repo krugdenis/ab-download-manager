@@ -19,6 +19,28 @@ val myColors
     @Composable
     get() = LocalMyColors.current
 
+private val darkQueueColors = listOf(
+    Color(0xFF4CAF50),  // Green
+    Color(0xFF2196F3),  // Blue
+    Color(0xFFFF9800),  // Orange
+    Color(0xFF9C27B0),  // Purple
+    Color(0xFFF44336),  // Red
+    Color(0xFF00BCD4),  // Cyan
+    Color(0xFFFFEB3B),  // Yellow
+    Color(0xFF8BC34A),  // Light Green
+)
+
+private val lightQueueColors = listOf(
+    Color(0xFF2E7D32),  // Darker Green
+    Color(0xFF1976D2),  // Darker Blue
+    Color(0xFFE65100),  // Darker Orange
+    Color(0xFF7B1FA2),  // Darker Purple
+    Color(0xFFC62828),  // Darker Red
+    Color(0xFF00838F),  // Darker Cyan
+    Color(0xFFF9A825),  // Darker Yellow
+    Color(0xFF558B2F),  // Darker Light Green
+)
+
 @Immutable
 data class MyColors(
     val id: String,
@@ -44,6 +66,7 @@ data class MyColors(
     val info: Color,
     val onInfo: Color,
     val isLight: Boolean,
+    val queueColors: List<Color> = if (isLight) lightQueueColors else darkQueueColors,
 ) {
 
     val warningGradient: Brush by lazy {
@@ -160,6 +183,7 @@ private object AnimateMyColors {
             isLight = isLight,
             name = toBeAnimated.name,
             id = toBeAnimated.id,
+            queueColors = toBeAnimated.queueColors,
         )
     }
 
@@ -230,6 +254,7 @@ private object AnimateMyColorsWithSingleTransition {
             isLight = toBeAnimated.isLight,
             name = toBeAnimated.name,
             id = toBeAnimated.id,
+            queueColors = toBeAnimated.queueColors,
         )
     }
 }

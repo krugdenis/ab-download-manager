@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.aboutLibraries.core)
     implementation(project(":shared:app"))
     ksp(libs.arrow.opticKsp)
+    ksp(project(":shared:app"))  // Required for Arrow Optics to see cross-module types
 }
 
 aboutLibraries {

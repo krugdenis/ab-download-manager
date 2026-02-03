@@ -18,6 +18,10 @@ val defaultSemVersion = "1.0.0"
 val fallBackVersion = "$defaultSemVersion-untagged"
 
 gitVersion {
+    // Prefer tags over branch names for version generation in fork
+    // This ensures tagged releases use semantic version from tag
+    // instead of branch-based snapshot versions
+    preferTag = true
     on {
         branch(".+") {
             "$defaultSemVersion-${it.refInfo.shortenName}-snapshot"
